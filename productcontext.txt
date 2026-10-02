@@ -1,0 +1,48 @@
+# Discograde — Product Context
+
+Discograde is a mobile-first, community-powered app for discovering, rating, reviewing, and discussing **albums and EPs**. Its focus is the album as a whole: users explore a catalog, give releases an overall score, review them, and talk about them with other listeners.
+
+## Main experience
+
+The app has four primary sections:
+
+- **Home:** Featured and popular releases, new releases, and search.
+- **Charts:** Album rankings and discovery views.
+- **Forums:** Album-centered discussions with a Reddit-like thread and replies.
+- **Profile:** A user’s ratings, reviews, lists, profile photo, and favorite genres.
+
+Search is intended for albums and artists, with album results leading to album detail pages. Songs are not a search category because Discograde is album/EP-centric.
+
+## Album pages and ratings
+
+An album page can show its cover, title, artist, release date, format, label, genres, credits, and tracklist, depending on which metadata is available.
+
+Users can:
+
+- Rate an album on a **0–100 scale** and write a review.
+- Rate individual tracks with typed scores. These are **personal track ratings**, kept separate from the album’s community score.
+- View and discuss reviews.
+
+Score colors are reserved for ratings: red below 60, amber 60–74, orange 75–89, and green 90–100. The orange score band remains orange even though the app’s general accent color is teal.
+
+## Community and identity
+
+Discussions are tied to an album and have a title and body. Users can reply, like comments, and reply to comments. The intended identity shown around the app is the user’s **username** (such as `@username`), not a separate display name.
+
+Profiles can include an optional photo and favorite genres. Sign-up supports email/password and Google, with first-time Google users completing profile setup before entering the app.
+
+## Catalog and metadata
+
+The project uses Firebase Authentication and Cloud Firestore. A local Python importer uses MusicBrainz to add releases to Firestore. It can import releases for artists listed in `tools/artists.txt`, including albums and EPs, and can fetch genres, tracklists, labels, formats, and available producer/writer credits. Cover art and some fields may be missing; completeness depends on the source data and release edition.
+
+The importer is configured around selected artists. It does not automatically copy the entire MusicBrainz database into the app.
+
+## Visual direction
+
+Discograde uses Inter typography, off-white backgrounds, charcoal text, teal accents, rounded cards and controls, and a mostly flat visual style. Navy is for brand elements. Red is used for errors and low scores. The experience is designed for mobile screens and comfortable touch interaction.
+
+## Implementation notes
+
+Firebase is used for authentication and app data. The README documents collections such as `albums`, `reviews`, `threads`, `comments`, `users`, and `lists`. Some forum discussion and reply UI was built first as a local preview, so **new discussion persistence may still need completion** before posts reliably survive app restarts or appear across devices. Existing indexes and Firebase configuration may also be required for some Firestore queries.
+
+In short: **Discograde is an album-focused music community where people discover releases, rate and review them, build personal listening profiles, and discuss albums together.**

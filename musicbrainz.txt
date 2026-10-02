@@ -1,0 +1,6 @@
+$env:MUSICBRAINZ_CONTACT = "a.aquino.544123@umindanao.edu.ph"
+$env:GOOGLE_APPLICATION_CREDENTIALS = "C:\Users\kuya ac\Downloads\discograde0901-firebase-adminsdk-fbsvc-fff97d6dca.json"
+.\.venv\Scripts\python.exe tools/import_album.py --sync-artists
+
+# get all
+.\.venv\Scripts\python.exe tools/import_album.py --all-releases
