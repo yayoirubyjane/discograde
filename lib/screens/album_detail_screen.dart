@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'profile_screen.dart';
 import '../utils/score_color.dart';
 
 const _charcoal = Color(0xFF3F3F3F);
@@ -107,22 +110,43 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen>
                   child: SizedBox(
                     width: double.infinity,
                     height: 52,
-                    child: FilledButton(
-                      onPressed: () => _openReviewSheet(album),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _charcoal,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: Text(
-                        'Write a Review',
-                        style: GoogleFonts.inter(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseAuth.instance.currentUser == null
+                          ? null
+                          : _firestore
+                                .collection('reviews')
+                                .where('albumId', isEqualTo: widget.albumId)
+                                .snapshots(),
+                      builder: (context, reviewSnapshot) {
+                        final uid = FirebaseAuth.instance.currentUser?.uid;
+                        final alreadyReviewed =
+                            uid != null &&
+                            reviewSnapshot.data?.docs.any(
+                                  (doc) => doc.data()['userId'] == uid,
+                                ) ==
+                                true;
+                        return FilledButton(
+                          onPressed: alreadyReviewed
+                              ? null
+                              : () => _openReviewSheet(album),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _charcoal,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: Text(
+                            alreadyReviewed
+                                ? 'Review Submitted'
+                                : 'Write a Review',
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -142,8 +166,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen>
   Widget _errorScaffold(String message) => Scaffold(
     backgroundColor: const Color(0xFFF5F5F5),
     appBar: AppBar(
-      backgroundColor: _charcoal,
-      foregroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF5F5F5),
+      foregroundColor: _charcoal,
       title: const Text('Album'),
     ),
     body: Center(
@@ -157,42 +181,59 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen>
   Widget _albumAppBar(Map<String, dynamic> album) {
     final coverUrl = album['coverUrl'] as String? ?? '';
     final title = album['title'] as String? ?? 'Album';
-    return SliverAppBar(
-      pinned: true,
-      expandedHeight: 260,
-      backgroundColor: _charcoal,
-      foregroundColor: Colors.white,
-      iconTheme: const IconThemeData(color: Colors.white),
-      title: ValueListenableBuilder<double>(
-        valueListenable: _appBarTitleOpacity,
-        builder: (context, opacity, child) =>
-            Opacity(opacity: opacity, child: child),
-        child: Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
+    return ValueListenableBuilder<double>(
+      valueListenable: _appBarTitleOpacity,
+      builder: (context, opacity, child) => SliverAppBar(
+        pinned: true,
+        expandedHeight: 260,
+        backgroundColor: Color.lerp(
+          Colors.transparent,
+          const Color(0xFFF5F5F5),
+          opacity,
         ),
-      ),
-      flexibleSpace: FlexibleSpaceBar(
-        background: Stack(
-          fit: StackFit.expand,
-          children: [
-            _cover(coverUrl),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0x33000000),
-                    Color(0x00000000),
-                    Color(0x66000000),
-                  ],
+        foregroundColor: Color.lerp(Colors.white, _charcoal, opacity),
+        iconTheme: IconThemeData(
+          color: Color.lerp(Colors.white, _charcoal, opacity),
+        ),
+        systemOverlayStyle: opacity < 0.5
+            ? SystemUiOverlayStyle.light.copyWith(
+                statusBarColor: Colors.transparent,
+                statusBarBrightness: Brightness.dark,
+              )
+            : const SystemUiOverlayStyle(
+                statusBarColor: Color(0xFFF5F5F5),
+                statusBarIconBrightness: Brightness.dark,
+                statusBarBrightness: Brightness.light,
+              ),
+        title: Opacity(
+          opacity: opacity,
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+        ),
+        flexibleSpace: FlexibleSpaceBar(
+          background: Stack(
+            fit: StackFit.expand,
+            children: [
+              _cover(coverUrl),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0x33000000),
+                      Color(0x00000000),
+                      Color(0x66000000),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -523,8 +564,11 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen>
           return SliverList.separated(
             itemCount: reviews.length,
             separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, index) =>
-                _ReviewCard(review: reviews[index].data()),
+            itemBuilder: (context, index) => _ReviewCard(
+              key: ValueKey(reviews[index].id),
+              reviewId: reviews[index].id,
+              review: reviews[index].data(),
+            ),
           );
         },
       );
@@ -552,7 +596,10 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen>
     var username = user?.email?.split('@').first ?? 'listener';
     if (user != null) {
       try {
-        final profile = await _firestore.collection('users').doc(user.uid).get();
+        final profile = await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .get();
         username = profile.data()?['handle'] as String? ?? username;
       } catch (_) {
         // Use the account email as a fallback if profile lookup is unavailable.
@@ -560,6 +607,20 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen>
     }
     final reviewRef = _firestore.collection('reviews').doc();
     final albumRef = _firestore.collection('albums').doc(widget.albumId);
+    var trackRatings = <String, dynamic>{};
+    if (user != null) {
+      try {
+        final ratingsDoc = await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('trackRatings')
+            .doc(widget.albumId)
+            .get();
+        final rawRatings = ratingsDoc.data()?['ratings'];
+        if (rawRatings is Map)
+          trackRatings = Map<String, dynamic>.from(rawRatings);
+      } catch (_) {}
+    }
     try {
       await _firestore.runTransaction((transaction) async {
         final albumSnapshot = await transaction.get(albumRef);
@@ -572,12 +633,14 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen>
 
         transaction.set(reviewRef, {
           'albumId': widget.albumId,
+          'albumTitle': album['title'] as String? ?? 'an album',
           'userId': user?.uid ?? 'guest',
           'username': username,
           'score': score,
           'text': text.trim(),
           'likes': 0,
           'comments': 0,
+          'trackRatings': trackRatings,
           'createdAt': FieldValue.serverTimestamp(),
         });
         transaction.update(albumRef, {
@@ -1489,8 +1552,9 @@ class _TrackRatingsSheetState extends State<_TrackRatingsSheet> {
 }
 
 class _ReviewCard extends StatefulWidget {
-  const _ReviewCard({required this.review});
+  const _ReviewCard({super.key, required this.reviewId, required this.review});
 
+  final String reviewId;
   final Map<String, dynamic> review;
 
   @override
@@ -1499,7 +1563,143 @@ class _ReviewCard extends StatefulWidget {
 
 class _ReviewCardState extends State<_ReviewCard> {
   bool _expanded = false;
-  bool _liked = false;
+  late bool _liked;
+
+  @override
+  void initState() {
+    super.initState();
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final likedBy = widget.review['likedBy'];
+    _liked = uid != null && likedBy is List && likedBy.contains(uid);
+  }
+
+  Future<void> _notifyOwner(String type, {String? commentText}) async {
+    final actor = FirebaseAuth.instance.currentUser;
+    final ownerId = widget.review['userId'] as String?;
+    if (actor == null ||
+        ownerId == null ||
+        ownerId.isEmpty ||
+        ownerId == actor.uid)
+      return;
+    var actorName = actor.email?.split('@').first ?? 'Listener';
+    try {
+      final profile = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(actor.uid)
+          .get();
+      actorName = profile.data()?['handle'] as String? ?? actorName;
+    } catch (_) {}
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(ownerId)
+        .collection('notifications')
+        .add({
+          'type': type,
+          'actorId': actor.uid,
+          'actorName': actorName,
+          'reviewId': widget.reviewId,
+          'albumId': widget.review['albumId'],
+          'albumTitle': widget.review['albumTitle'] ?? 'your review',
+          if (commentText != null) 'commentText': commentText,
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+  }
+
+  Future<void> _openComments() => _openPostDetails(showComposer: true);
+
+  Future<void> _saveComment(String text) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (text.isEmpty || user == null) return;
+    var username = user.email?.split('@').first ?? 'Listener';
+    try {
+      final profile = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      username = profile.data()?['handle'] as String? ?? username;
+    } catch (_) {}
+    final reviewRef = FirebaseFirestore.instance
+        .collection('reviews')
+        .doc(widget.reviewId);
+    try {
+      final commentRef = reviewRef.collection('comments').doc();
+      final batch = FirebaseFirestore.instance.batch();
+      batch.set(commentRef, {
+        'userId': user.uid,
+        'username': username,
+        'text': text,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      batch.update(reviewRef, {'comments': FieldValue.increment(1)});
+      await batch.commit();
+      try {
+        await _notifyOwner('comment', commentText: text);
+      } catch (_) {}
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not post comment: $error')),
+        );
+    }
+  }
+
+  Future<void> _openPostDetails({bool showComposer = false}) async {
+    final location = showComposer
+        ? '/review/${widget.reviewId}?compose=true'
+        : '/review/${widget.reviewId}';
+    await context.push<void>(location);
+  }
+
+  Future<void> _toggleLike() async {
+    final nextLiked = !_liked;
+    setState(() => _liked = nextLiked);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      setState(() => _liked = !nextLiked);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Log in to like reviews.')));
+      return;
+    }
+    try {
+      var addedLike = false;
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final ref = FirebaseFirestore.instance
+            .collection('reviews')
+            .doc(widget.reviewId);
+        final snapshot = await transaction.get(ref);
+        if (!snapshot.exists)
+          throw StateError('This review is no longer available.');
+        final data = snapshot.data() ?? <String, dynamic>{};
+        final likedBy = (data['likedBy'] as List? ?? [])
+            .whereType<String>()
+            .toSet();
+        final wasLiked = likedBy.contains(uid);
+        if (wasLiked == nextLiked) return;
+        final count = _toInt(data['likes']) ?? 0;
+        transaction.update(ref, {
+          'likes': (count + (nextLiked ? 1 : -1)).clamp(0, 1 << 31),
+          'likedBy': nextLiked
+              ? FieldValue.arrayUnion([uid])
+              : FieldValue.arrayRemove([uid]),
+        });
+        addedLike = nextLiked;
+      });
+      if (addedLike) {
+        try {
+          await _notifyOwner('like');
+        } catch (_) {}
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _liked = !nextLiked);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update like: $error')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1510,117 +1710,218 @@ class _ReviewCardState extends State<_ReviewCard> {
         ? '${text.substring(0, 160)}…'
         : text;
     final score = _toInt(review['score']) ?? 0;
-    final likes = (_toInt(review['likes']) ?? 0) + (_liked ? 1 : 0);
+    final likes = _toInt(review['likes']) ?? 0;
     final comments = _toInt(review['comments']) ?? 0;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const CircleAvatar(
-                radius: 18,
-                backgroundColor: _charcoal,
-                child: Icon(Icons.person, color: Colors.white, size: 19),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  review['username'] as String? ?? 'Listener',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: _charcoal,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _openPostDetails,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                InkWell(
+                  onTap: () {
+                    final userId = review['userId'] as String?;
+                    if (userId != null && userId.isNotEmpty) {
+                      context.push(profileRouteLocation(userId));
+                    }
+                  },
+                  customBorder: const CircleBorder(),
+                  child: _ReviewAvatar(userId: review['userId'] as String?),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      final userId = review['userId'] as String?;
+                      if (userId != null && userId.isNotEmpty) {
+                        context.push(profileRouteLocation(userId));
+                      }
+                    },
+                    child: Text(
+                      review['username'] as String? ?? 'Listener',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: _charcoal,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: scorePalette(score),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  '$score',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scorePalette(score),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    '$score',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            shownText,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              height: 1.45,
-              color: _charcoal.withValues(alpha: 0.7),
+              ],
             ),
-          ),
-          if (isLong)
-            InkWell(
-              onTap: () => setState(() => _expanded = !_expanded),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  _expanded ? 'read less' : 'read more',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: _teal,
+            if (text.isNotEmpty) const SizedBox(height: 8),
+            if (text.isNotEmpty)
+              Text(
+                shownText,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: _charcoal.withValues(alpha: 0.7),
+                ),
+              ),
+            if (isLong)
+              InkWell(
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _expanded ? 'read less' : 'read more',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: _teal,
+                    ),
                   ),
                 ),
               ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 5),
+              child: Divider(height: 1, color: Color(0xFFE6E6E6)),
             ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 10),
-            child: Divider(height: 1, color: Color(0xFFE6E6E6)),
-          ),
-          Row(
-            children: [
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                onPressed: () => setState(() => _liked = !_liked),
-                icon: Icon(
-                  _liked ? Icons.favorite : Icons.favorite_border,
-                  size: 19,
-                  color: _liked ? Colors.red : _grey,
+            Row(
+              children: [
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  onPressed: _toggleLike,
+                  icon: Icon(
+                    _liked ? Icons.favorite : Icons.favorite_border,
+                    size: 19,
+                    color: _liked ? Colors.red : _grey,
+                  ),
                 ),
-              ),
-              Text(
-                '$likes',
-                style: GoogleFonts.inter(fontSize: 12, color: _grey),
-              ),
-              const SizedBox(width: 18),
-              const Icon(Icons.chat_bubble_outline, size: 17, color: _grey),
-              const SizedBox(width: 6),
-              Text(
-                '$comments',
-                style: GoogleFonts.inter(fontSize: 12, color: _grey),
-              ),
-            ],
-          ),
-        ],
+                Text(
+                  '$likes',
+                  style: GoogleFonts.inter(fontSize: 12, color: _grey),
+                ),
+                const SizedBox(width: 18),
+                IconButton(
+                  tooltip: 'Comment on review',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: 32,
+                  ),
+                  onPressed: _openComments,
+                  icon: const Icon(
+                    Icons.chat_bubble_outline,
+                    size: 17,
+                    color: _grey,
+                  ),
+                ),
+                Text(
+                  '$comments',
+                  style: GoogleFonts.inter(fontSize: 12, color: _grey),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
+}
+
+class _ReviewAvatar extends StatelessWidget {
+  const _ReviewAvatar({required this.userId});
+
+  final String? userId;
+
+  @override
+  Widget build(BuildContext context) {
+    final id = userId;
+    if (id == null || id.isEmpty) return _fallback();
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(id)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final profile = snapshot.data?.data();
+        final encoded = profile?['photoBase64'] as String?;
+        final url = profile?['photoUrl'] as String?;
+        ImageProvider? image;
+        if (encoded != null && encoded.isNotEmpty) {
+          try {
+            image = MemoryImage(base64Decode(encoded));
+          } catch (_) {}
+        }
+        image ??= url == null || url.isEmpty ? null : NetworkImage(url);
+        if (image is MemoryImage) {
+          return CircleAvatar(
+            radius: 18,
+            backgroundColor: _charcoal,
+            child: ClipOval(
+              child: Image(
+                image: image,
+                width: 36,
+                height: 36,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => _fallback(),
+              ),
+            ),
+          );
+        }
+        if (url != null && url.isNotEmpty) {
+          return CircleAvatar(
+            radius: 18,
+            backgroundColor: _charcoal,
+            child: ClipOval(
+              child: Image.network(
+                url,
+                width: 36,
+                height: 36,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => _fallback(),
+              ),
+            ),
+          );
+        }
+        return _fallback();
+      },
+    );
+  }
+
+  Widget _fallback() => const CircleAvatar(
+    radius: 18,
+    backgroundColor: _charcoal,
+    child: Icon(Icons.person, color: Colors.white, size: 19),
+  );
 }
 
 Widget _cover(String url) => url.isEmpty

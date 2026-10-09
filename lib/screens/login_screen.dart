@@ -178,6 +178,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           AutofillHints.username,
                           AutofillHints.email,
                         ],
+                        errorBuilder: (_, error) => Transform.translate(
+                          offset: const Offset(-18, 0),
+                          child: Text(error),
+                        ),
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           color: _loginInk,
@@ -203,6 +207,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         textInputAction: TextInputAction.done,
                         autofillHints: const [AutofillHints.password],
                         onFieldSubmitted: (_) => _login(),
+                        errorBuilder: (_, error) => Transform.translate(
+                          offset: const Offset(-18, 0),
+                          child: Text(error),
+                        ),
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           color: _loginInk,

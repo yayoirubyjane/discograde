@@ -25,6 +25,7 @@ class AuthService {
     required String email,
     required String password,
     List<String> favoriteGenres = const [],
+    String aboutMe = '',
     String? photoBase64,
   }) async {
     final credential = await FirebaseService.auth
@@ -36,6 +37,7 @@ class AuthService {
       displayName: normalizedUsername,
       username: normalizedUsername,
       favoriteGenres: favoriteGenres,
+      aboutMe: aboutMe,
       photoBase64: photoBase64,
       profileSetupComplete: true,
     );
@@ -118,6 +120,7 @@ class AuthService {
   static Future<void> completeGoogleProfile({
     required String username,
     required List<String> favoriteGenres,
+    String aboutMe = '',
     String? photoBase64,
   }) async {
     final user = FirebaseService.auth.currentUser;
@@ -134,6 +137,7 @@ class AuthService {
       'handle': normalizedUsername,
       'email': user.email,
       'favoriteGenres': favoriteGenres,
+      'aboutMe': aboutMe,
       'profileSetupComplete': true,
       'profileSetupVersion': 1,
     };
@@ -159,6 +163,7 @@ class AuthService {
     String? displayName,
     String? username,
     List<String> favoriteGenres = const [],
+    String aboutMe = '',
     String? photoBase64,
     bool profileSetupComplete = true,
   }) async {
@@ -175,6 +180,7 @@ class AuthService {
       'handle': handle,
       'email': user.email,
       'favoriteGenres': favoriteGenres,
+      'aboutMe': aboutMe,
       'ratingCount': 0,
       'reviewCount': 0,
       'listCount': 0,

@@ -1,13 +1,12 @@
-import 'dart:convert';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_ai/firebase_ai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import '../services/ai_discovery_service.dart';
 
 const _teal = Color(0xFF0E8A8A);
 const _ink = Color(0xFF3F3F3F);
@@ -30,7 +29,8 @@ class _AiDiscoveryScreenState extends State<AiDiscoveryScreen> {
     ),
   ];
   final Map<String, Map<String, dynamic>> _albumsById = {};
-  ChatSession? _chat;
+  List<Map<String, dynamic>> _catalog = [];
+  Map<String, dynamic> _listenerProfile = {};
   bool _loadingCatalog = true;
   bool _sending = false;
   String? _loadError;
@@ -103,32 +103,22 @@ class _AiDiscoveryScreenState extends State<AiDiscoveryScreen> {
           return {
             'albumId': data['albumId'],
             'score': data['score'],
-            if ((data['text'] as String?)?.trim().isNotEmpty == true)
-              'review': (data['text'] as String).trim().substring(
-                0,
-                (data['text'] as String).trim().length.clamp(0, 240).toInt(),
-              ),
           };
         }).toList();
       }
 
-      final model = FirebaseAI.googleAI().generativeModel(
-        model: 'gemini-3.8-flash',
-        generationConfig: GenerationConfig(
-          responseMimeType: 'application/json',
-          temperature: 0.7,
-        ),
-        systemInstruction: Content.text('''
-You are Discograde's album discovery assistant. Help users find albums from the supplied Discograde catalog only. Never invent an album or claim catalog details that are absent. Personalize with the listener profile and their review scores when provided. Ask one short follow-up if the request is too vague. Keep the response friendly, concise, and focused on music discovery.
-Always return valid JSON with exactly this shape: {"message":"short helpful reply","recommendations":[{"albumId":"catalog id","reason":"one sentence explaining the match"}]}. Use zero recommendations for follow-up questions; otherwise return up to three distinct album IDs that appear in the catalog.
-Listener profile: ${jsonEncode({'favoriteGenres': profile['favoriteGenres'] ?? [], 'recentReviews': reviews})}
-Available Discograde catalog (only source of recommendations): ${jsonEncode(albums)}
-'''),
-      );
-
       if (!mounted) return;
       setState(() {
-        _chat = model.startChat();
+        _catalog = albums;
+        _listenerProfile = {
+          'favoriteGenres': profile['favoriteGenres'] is List
+              ? (profile['favoriteGenres'] as List)
+                    .whereType<String>()
+                    .take(12)
+                    .toList()
+              : <String>[],
+          'recentReviews': reviews,
+        };
         _loadingCatalog = false;
       });
     } catch (error) {
@@ -150,16 +140,38 @@ Available Discograde catalog (only source of recommendations): ${jsonEncode(albu
 
   Future<void> _send([String? suggestion]) async {
     final prompt = (suggestion ?? _input.text).trim();
-    if (prompt.isEmpty || _sending || _chat == null) return;
+    if (prompt.isEmpty || _sending || _catalog.isEmpty) return;
     _input.clear();
+    final history = _messages
+        .skip(1)
+        .where(
+          (message) =>
+              !message.text.startsWith('AI request failed:') &&
+              !message.text.startsWith('I couldn’t get a recommendation'),
+        )
+        .toList();
+    final recentHistory = history.length > 8
+        ? history.sublist(history.length - 8)
+        : history;
     setState(() {
       _sending = true;
       _messages.add(_ChatMessage(fromAssistant: false, text: prompt));
     });
     _scrollToBottom();
     try {
-      final response = await _chat!.sendMessage(Content.text(prompt));
-      final decoded = jsonDecode(response.text ?? '{}') as Map<String, dynamic>;
+      final decoded = await AiDiscoveryService.instance.sendMessage(
+        prompt: prompt,
+        catalog: _catalog,
+        profile: _listenerProfile,
+        history: recentHistory
+            .map(
+              (message) => {
+                'role': message.fromAssistant ? 'assistant' : 'user',
+                'content': message.text,
+              },
+            )
+            .toList(),
+      );
       final recommendations = (decoded['recommendations'] as List? ?? [])
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
@@ -222,6 +234,8 @@ Available Discograde catalog (only source of recommendations): ${jsonEncode(albu
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       backgroundColor: const Color(0xFFF5F5F5),
+      foregroundColor: _ink,
+      surfaceTintColor: Colors.transparent,
       title: Text(
         'AI DISCOVERY',
         style: GoogleFonts.inter(
@@ -338,7 +352,7 @@ Available Discograde catalog (only source of recommendations): ${jsonEncode(albu
         Expanded(
           child: TextField(
             controller: _input,
-            enabled: !_sending && _chat != null,
+            enabled: !_sending && !_loadingCatalog && _loadError == null,
             minLines: 1,
             maxLines: 4,
             textInputAction: TextInputAction.send,

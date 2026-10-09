@@ -1,8 +1,6 @@
 HIGH PRIORITY
 1. AI CHATBOT (ambot naunsa nani ron)
-2. notifications
-settings and stuffs
-edit and delete
+2. edit and delete
 3. profile page - about
 
 LOW PRIORITY

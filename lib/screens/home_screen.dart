@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -28,7 +29,7 @@ class _HomeScreenState extends State<HomeScreen>
   int _selectedRankTab = 0;
   late final TabController _rankTabController;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _newReleasesStream;
-  Future<List<_Album>>? _allAlbumsFuture;
+  Future<_SearchData>? _quickSearchFuture;
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
 
@@ -49,16 +50,22 @@ class _HomeScreenState extends State<HomeScreen>
         .snapshots();
   }
 
-  Future<List<_Album>> _loadAllAlbums() async {
-    final snapshot = await _albums.get();
-    return snapshot.docs.map(_Album.fromDocument).toList();
+  Future<_SearchData> _loadQuickSearch() async {
+    final snapshots = await Future.wait([
+      _albums.get(),
+      FirebaseService.firestore.collection('users').get(),
+    ]);
+    return _SearchData(
+      albums: snapshots[0].docs.map(_Album.fromDocument).toList(),
+      users: snapshots[1].docs.map(_SearchUser.fromDocument).toList(),
+    );
   }
 
   void _onSearchFocusChanged() => setState(() {});
 
   void _onSearchChanged(String _) {
     if (_searchController.text.trim().isNotEmpty) {
-      _allAlbumsFuture ??= _loadAllAlbums();
+      _quickSearchFuture ??= _loadQuickSearch();
     }
     setState(() {});
   }
@@ -209,7 +216,7 @@ class _HomeScreenState extends State<HomeScreen>
       onChanged: _onSearchChanged,
       onSubmitted: _openSearchResults,
       decoration: InputDecoration(
-        hintText: 'Search albums or artists',
+        hintText: 'Search albums, artists or users',
         hintStyle: GoogleFonts.inter(fontSize: 14, color: _muted),
         prefixIcon: IconButton(
           tooltip: 'Search',
@@ -251,14 +258,14 @@ class _HomeScreenState extends State<HomeScreen>
       return const SizedBox.shrink();
     }
 
-    return FutureBuilder<List<_Album>>(
-      future: _allAlbumsFuture,
+    return FutureBuilder<_SearchData>(
+      future: _quickSearchFuture,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _searchPanel(
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('Could not search albums right now.'),
+              child: Text('Could not search right now.'),
             ),
           );
         }
@@ -280,16 +287,24 @@ class _HomeScreenState extends State<HomeScreen>
           );
         }
 
-        final results = snapshot.data!
+        final albums = snapshot.data!.albums
             .where(
               (album) =>
                   album.title.toLowerCase().contains(query) ||
                   album.artist.toLowerCase().contains(query),
             )
-            .take(8)
+            .take(5)
+            .toList();
+        final users = snapshot.data!.users
+            .where(
+              (user) =>
+                  user.handle.toLowerCase().contains(query) ||
+                  user.displayName.toLowerCase().contains(query),
+            )
+            .take(5)
             .toList();
 
-        if (results.isEmpty) {
+        if (albums.isEmpty && users.isEmpty) {
           return _searchPanel(
             Padding(
               padding: const EdgeInsets.all(16),
@@ -310,30 +325,66 @@ class _HomeScreenState extends State<HomeScreen>
               padding: const EdgeInsets.symmetric(vertical: 4),
               shrinkWrap: true,
               primary: false,
-              itemCount: results.length,
+              itemCount:
+                  (albums.isEmpty ? 0 : albums.length + 1) +
+                  (users.isEmpty ? 0 : users.length + 1),
               separatorBuilder: (_, _) => const Divider(
                 height: 1,
                 indent: 68,
                 endIndent: 12,
                 color: Color(0xFFEDEDED),
               ),
-              itemBuilder: (context, index) => _AlbumSearchResult(
-                album: results[index],
-                onTap: () {
-                  _searchController.clear();
-                  _searchFocusNode.unfocus();
-                  setState(() {});
-                  context.push(
-                    '/album/${Uri.encodeComponent(results[index].id)}',
-                  );
-                },
-              ),
+              itemBuilder: (context, index) {
+                var resultIndex = index;
+                if (albums.isNotEmpty) {
+                  if (resultIndex == 0) return _quickSearchSection('ALBUMS');
+                  if (resultIndex <= albums.length) {
+                    final album = albums[resultIndex - 1];
+                    return _AlbumSearchResult(
+                      album: album,
+                      onTap: () {
+                        _searchController.clear();
+                        _searchFocusNode.unfocus();
+                        setState(() {});
+                        context.push(
+                          '/album/${Uri.encodeComponent(album.id)}',
+                        );
+                      },
+                    );
+                  }
+                  resultIndex -= albums.length + 1;
+                }
+                if (resultIndex == 0) return _quickSearchSection('PEOPLE');
+                final user = users[resultIndex - 1];
+                return _SearchResultTile(
+                  result: user.searchResult,
+                  onTap: () {
+                    _searchController.clear();
+                    _searchFocusNode.unfocus();
+                    setState(() {});
+                    context.push(_searchProfileLocation(user.id));
+                  },
+                );
+              },
             ),
           ),
         );
       },
     );
   }
+
+  Widget _quickSearchSection(String title) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 10, 12, 5),
+    child: Text(
+      title,
+      style: GoogleFonts.inter(
+        fontSize: 10,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1,
+        color: _muted,
+      ),
+    ),
+  );
 
   Widget _searchPanel(Widget child) => Container(
     width: double.infinity,
@@ -396,17 +447,51 @@ class _Album {
 }
 
 class _SearchData {
-  const _SearchData({required this.albums});
+  const _SearchData({required this.albums, required this.users});
 
   final List<_Album> albums;
+  final List<_SearchUser> users;
 }
 
-enum _SearchContentType { albums, artists }
+class _SearchUser {
+  const _SearchUser({required this.id, required this.data});
+
+  factory _SearchUser.fromDocument(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) => _SearchUser(id: doc.id, data: doc.data());
+
+  final String id;
+  final Map<String, dynamic> data;
+
+  String get displayName => (data['displayName'] as String? ?? '').trim();
+  String get avatarBase64 => data['photoBase64'] as String? ?? '';
+
+  String get handle {
+    final value =
+        (data['handle'] as String? ?? data['username'] as String? ?? '').trim();
+    if (value.isEmpty) return displayName;
+    return value.startsWith('@') ? value : '@$value';
+  }
+
+  _SearchResult get searchResult => _SearchResult(
+    title: displayName.isEmpty ? handle.replaceFirst('@', '') : displayName,
+    subtitle: handle,
+    coverUrl: '',
+    userId: id,
+    avatarBase64: avatarBase64,
+  );
+}
+
+String _searchProfileLocation(String userId) =>
+    '/user/${Uri.encodeComponent(userId)}?visit=${DateTime.now().microsecondsSinceEpoch}';
+
+enum _SearchContentType { albums, artists, users }
 
 extension on _SearchContentType {
   String get label => switch (this) {
     _SearchContentType.albums => 'Albums',
     _SearchContentType.artists => 'Artists',
+    _SearchContentType.users => 'Users',
   };
 }
 
@@ -428,6 +513,8 @@ class _SearchResult {
     this.score,
     this.date,
     this.albumId,
+    this.userId,
+    this.avatarBase64,
   });
 
   final String title;
@@ -436,6 +523,8 @@ class _SearchResult {
   final int? score;
   final DateTime? date;
   final String? albumId;
+  final String? userId;
+  final String? avatarBase64;
 }
 
 class _SearchResultTile extends StatelessWidget {
@@ -451,7 +540,12 @@ class _SearchResultTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       child: Row(
         children: [
-          _CoverImage(url: result.coverUrl, size: 48, radius: 8),
+          result.userId == null
+              ? _CoverImage(url: result.coverUrl, size: 48, radius: 8)
+              : _SearchUserAvatar(
+                  name: result.title,
+                  encodedImage: result.avatarBase64,
+                ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -485,6 +579,40 @@ class _SearchResultTile extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _SearchUserAvatar extends StatelessWidget {
+  const _SearchUserAvatar({required this.name, required this.encodedImage});
+
+  final String name;
+  final String? encodedImage;
+
+  @override
+  Widget build(BuildContext context) {
+    ImageProvider? image;
+    if (encodedImage != null && encodedImage!.isNotEmpty) {
+      try {
+        image = MemoryImage(base64Decode(encodedImage!));
+      } catch (_) {}
+    }
+    final visibleName = name.replaceFirst('@', '').trim();
+    final initial = visibleName.isEmpty ? '?' : visibleName[0].toUpperCase();
+    return CircleAvatar(
+      radius: 24,
+      backgroundColor: const Color(0xFFE8F4F3),
+      foregroundImage: image,
+      child: image == null
+          ? Text(
+              initial,
+              style: GoogleFonts.inter(
+                color: _teal,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          : null,
+    );
+  }
 }
 
 DateTime? _searchDate(Object? value) {
@@ -566,8 +694,14 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<_SearchData> _loadCatalog() async {
-    final albums = await _albums.get();
-    return _SearchData(albums: albums.docs.map(_Album.fromDocument).toList());
+    final snapshots = await Future.wait([
+      _albums.get(),
+      FirebaseService.firestore.collection('users').get(),
+    ]);
+    return _SearchData(
+      albums: snapshots[0].docs.map(_Album.fromDocument).toList(),
+      users: snapshots[1].docs.map(_SearchUser.fromDocument).toList(),
+    );
   }
 
   List<_SearchResult> _resultsFor(_SearchData data, String query) {
@@ -636,6 +770,24 @@ class _SearchScreenState extends State<SearchScreen> {
           );
         }
         break;
+      case _SearchContentType.users:
+        results.addAll(
+          data.users
+              .where(
+                (user) =>
+                    user.displayName.toLowerCase().contains(query) ||
+                    user.handle.toLowerCase().contains(query),
+              )
+              .map((user) => user.searchResult),
+        );
+        break;
+    }
+
+    if (_contentType == _SearchContentType.users) {
+      results.sort(
+        (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+      );
+      return results;
     }
 
     switch (_sort) {
@@ -688,7 +840,7 @@ class _SearchScreenState extends State<SearchScreen> {
               onChanged: (value) => setState(() => _query = value),
               onSubmitted: (value) => setState(() => _query = value),
               decoration: InputDecoration(
-                hintText: 'Search albums or artists',
+                hintText: 'Search albums, artists or users',
                 hintStyle: GoogleFonts.inter(fontSize: 14, color: _muted),
                 prefixIcon: const Icon(Icons.search_rounded, color: _teal),
                 suffixIcon: _query.isEmpty
@@ -722,44 +874,46 @@ class _SearchScreenState extends State<SearchScreen> {
               children: [
                 for (final type in _SearchContentType.values)
                   Expanded(child: _contentTab(type)),
-                const SizedBox(width: 4),
-                PopupMenuButton<_SearchSort>(
-                  tooltip: 'Sort search results',
-                  initialValue: _sort,
-                  onSelected: (sort) => setState(() => _sort = sort),
-                  itemBuilder: (context) => [
-                    for (final sort in _SearchSort.values)
-                      PopupMenuItem(value: sort, child: Text(sort.label)),
-                  ],
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 40),
-                    padding: const EdgeInsets.symmetric(horizontal: 9),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF5F5F5),
-                      border: Border.all(color: _ink),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Sort: ${_sort.label}',
-                          style: GoogleFonts.inter(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
+                if (_contentType != _SearchContentType.users) ...[
+                  const SizedBox(width: 4),
+                  PopupMenuButton<_SearchSort>(
+                    tooltip: 'Sort search results',
+                    initialValue: _sort,
+                    onSelected: (sort) => setState(() => _sort = sort),
+                    itemBuilder: (context) => [
+                      for (final sort in _SearchSort.values)
+                        PopupMenuItem(value: sort, child: Text(sort.label)),
+                    ],
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 40),
+                      padding: const EdgeInsets.symmetric(horizontal: 9),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5F5F5),
+                        border: Border.all(color: _ink),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Sort: ${_sort.label}',
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: _ink,
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          const Icon(
+                            Icons.keyboard_arrow_down,
+                            size: 18,
                             color: _ink,
                           ),
-                        ),
-                        const SizedBox(width: 2),
-                        const Icon(
-                          Icons.keyboard_arrow_down,
-                          size: 18,
-                          color: _ink,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -781,7 +935,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 if (normalizedQuery.isEmpty) {
                   return const _SearchMessage(
                     icon: Icons.search_rounded,
-                    text: 'Search albums and artists by name.',
+                    text: 'Search albums, artists or users by name.',
                   );
                 }
 
@@ -808,7 +962,11 @@ class _SearchScreenState extends State<SearchScreen> {
                       clipBehavior: Clip.antiAlias,
                       child: _SearchResultTile(
                         result: result,
-                        onTap: result.albumId != null
+                        onTap: result.userId != null
+                            ? () => context.push(
+                                _searchProfileLocation(result.userId!),
+                              )
+                            : result.albumId != null
                             ? () => context.push(
                                 '/album/${Uri.encodeComponent(result.albumId!)}',
                               )

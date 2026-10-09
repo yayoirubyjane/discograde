@@ -11,12 +11,45 @@ Android and iOS with the FlutterFire CLI).
 
 ## AI album discovery
 
-The Home screen includes an AI album discovery chat powered by Firebase AI
-Logic and Gemini. In Firebase Console, open **AI Logic**, complete setup for
-the Gemini Developer API, and confirm the app's Firebase configuration is
-current. The assistant uses up to 100 albums from Firestore and, when signed
-in, the listener's favorite genres and recent review scores to suggest albums
-from that catalog. Recommendations link to the existing album detail screen.
+The Home screen includes an album discovery chat powered by Cloudflare Workers
+AI (Meta Llama) while Firebase continues to provide authentication and the
+Firestore catalog. The Flutter client sends the listener's prompt, a compact
+catalog, favorite genres, and recent review scores to a Cloudflare Worker. The
+Worker verifies Firebase Auth and App Check tokens before running inference.
+It filters model recommendations to album IDs in the supplied catalog, and the
+app opens recommendations in the existing album detail screen. Review text is
+not sent to the model.
+
+### Deploy the Cloudflare Worker
+
+1. Create a Cloudflare account and make sure Workers AI is enabled. Workers AI
+   currently includes a limited daily no-cost allocation; requests made while
+   developing also use the account's model allocation. Check Cloudflare's
+   current [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/).
+2. Install Node.js, then open PowerShell in the `cloudflare` folder:
+
+   ```powershell
+   cd "C:\path\to\discograde\cloudflare"
+   npx wrangler login
+   npx wrangler deploy
+   ```
+
+3. Wrangler prints the deployed URL, for example
+   `https://discograde-ai.<your-subdomain>.workers.dev`.
+4. If you run Flutter Web, edit `ALLOWED_ORIGINS` in `wrangler.jsonc` to include
+   the exact origin where the web app is hosted. The default allows local web
+   development on port 5000. Android requests do not use browser CORS.
+5. From the project root, run Flutter with the Worker URL:
+
+   ```powershell
+   flutter run --dart-define=CLOUDFLARE_WORKER_URL=https://discograde-ai.<your-subdomain>.workers.dev
+   ```
+
+The Worker uses the Workers AI binding, so no Cloudflare API token is embedded
+in Flutter. It accepts requests only when Firebase Auth and App Check tokens
+belong to the configured Firebase project and registered Android/Web app IDs.
+Keep the Worker URL when building the app, and update the allowed web origin
+before hosting a web build.
 
 App Check initializes immediately after Firebase. Debug builds use debug
 providers; register the token printed on the first run in Firebase Console at

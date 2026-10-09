@@ -5,12 +5,20 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import 'profile_screen.dart';
 
 const _ink = Color(0xFF3F3F3F);
 const _muted = Color(0xFF858585);
 const _teal = Color(0xFF0E8A8A);
 const _placeholder = Color(0xFFE0E0E0);
+
+void _openUserProfile(BuildContext context, String userId) {
+  if (userId.isEmpty || userId == 'guest') return;
+  context.push(profileRouteLocation(userId));
+}
 
 class ThreadDetailScreen extends StatefulWidget {
   const ThreadDetailScreen({super.key, required this.threadId});
@@ -61,122 +69,138 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: _threadStream,
-        builder: (context, threadSnapshot) {
-          if (threadSnapshot.hasError) {
-            return _messageScaffold('Could not load this discussion. ${threadSnapshot.error}');
-          }
-          if (!threadSnapshot.hasData) {
-            return const Scaffold(body: Center(child: CircularProgressIndicator(color: _teal)));
-          }
-          final thread = threadSnapshot.data!.data();
-          if (thread == null) return _messageScaffold('This discussion could not be found.');
+  Widget build(
+    BuildContext context,
+  ) => StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+    stream: _threadStream,
+    builder: (context, threadSnapshot) {
+      if (threadSnapshot.hasError) {
+        return _messageScaffold(
+          'Could not load this discussion. ${threadSnapshot.error}',
+        );
+      }
+      if (!threadSnapshot.hasData) {
+        return const Scaffold(
+          body: Center(child: CircularProgressIndicator(color: _teal)),
+        );
+      }
+      final thread = threadSnapshot.data!.data();
+      if (thread == null)
+        return _messageScaffold('This discussion could not be found.');
 
-          return Scaffold(
-            backgroundColor: const Color(0xFFF5F5F5),
-            resizeToAvoidBottomInset: false,
-            appBar: _threadAppBar(thread),
-            body: Column(
-              children: [
-                Expanded(
-                  child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: _commentsStream,
-                    builder: (context, commentsSnapshot) {
-                if (commentsSnapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        'Could not load comments. ${commentsSnapshot.error}',
-                        style: GoogleFonts.inter(fontSize: 13, color: _muted),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  );
-                }
-                if (!commentsSnapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator(color: _teal));
-                }
-                final comments = [...commentsSnapshot.data!.docs]..sort((a, b) {
-                  final aTime = a.data()['createdAt'];
-                  final bTime = b.data()['createdAt'];
-                  if (aTime is! Timestamp) {
-                    return bTime is! Timestamp ? 0 : 1;
-                  }
-                  if (bTime is! Timestamp) return -1;
-                  return aTime.compareTo(bTime);
-                });
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-                  itemCount: comments.isEmpty ? 3 : comments.length + 2,
-                  itemBuilder: (context, index) {
-                    if (index == 0) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 20),
-                        child: _originalPostCard(thread),
-                      );
-                    }
-                    if (index == 1) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
+      return Scaffold(
+        backgroundColor: const Color(0xFFF5F5F5),
+        resizeToAvoidBottomInset: false,
+        appBar: _threadAppBar(thread),
+        body: Column(
+          children: [
+            Expanded(
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: _commentsStream,
+                builder: (context, commentsSnapshot) {
+                  if (commentsSnapshot.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
                         child: Text(
-                          'REPLIES',
-                          style: GoogleFonts.inter(
-                            color: _muted,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                      );
-                    }
-                    if (comments.isEmpty) {
-                      return Container(
-                        padding: const EdgeInsets.all(18),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Text(
-                          'No replies yet. Start the conversation.',
+                          'Could not load comments. ${commentsSnapshot.error}',
                           style: GoogleFonts.inter(fontSize: 13, color: _muted),
+                          textAlign: TextAlign.center,
                         ),
-                      );
-                    }
-                    final comment = comments[index - 2];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _CommentCard(
-                        key: ValueKey(comment.id),
-                        commentId: comment.id,
-                        comment: comment.data(),
-                        voted: _votedIds.contains(comment.id),
-                        replyVoted: (replyIndex) => _votedIds.contains('${comment.id}:$replyIndex'),
-                        onVote: () => _toggleCommentVote(comment.id),
-                        onReplyVote: (replyIndex) => _toggleReplyVote(comment.id, replyIndex),
-                        onReply: () => _beginReply(comment.id, comment.data()),
                       ),
                     );
-                  },
-                );
+                  }
+                  if (!commentsSnapshot.hasData) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: _teal),
+                    );
+                  }
+                  final comments = [...commentsSnapshot.data!.docs]
+                    ..sort((a, b) {
+                      final aTime = a.data()['createdAt'];
+                      final bTime = b.data()['createdAt'];
+                      if (aTime is! Timestamp) {
+                        return bTime is! Timestamp ? 0 : 1;
+                      }
+                      if (bTime is! Timestamp) return -1;
+                      return aTime.compareTo(bTime);
+                    });
+                  return ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                    itemCount: comments.isEmpty ? 3 : comments.length + 2,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 20),
+                          child: _originalPostCard(thread),
+                        );
+                      }
+                      if (index == 1) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Text(
+                            'REPLIES',
+                            style: GoogleFonts.inter(
+                              color: _muted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        );
+                      }
+                      if (comments.isEmpty) {
+                        return Container(
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            'No replies yet. Start the conversation.',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: _muted,
+                            ),
+                          ),
+                        );
+                      }
+                      final comment = comments[index - 2];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _CommentCard(
+                          key: ValueKey(comment.id),
+                          commentId: comment.id,
+                          comment: comment.data(),
+                          voted: _votedIds.contains(comment.id),
+                          replyVoted: (replyIndex) =>
+                              _votedIds.contains('${comment.id}:$replyIndex'),
+                          onVote: () => _toggleCommentVote(comment.id),
+                          onReplyVote: (replyIndex) =>
+                              _toggleReplyVote(comment.id, replyIndex),
+                          onReply: () =>
+                              _beginReply(comment.id, comment.data()),
+                        ),
+                      );
                     },
-                  ),
-                ),
-                AnimatedPadding(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOut,
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.viewInsetsOf(context).bottom,
-                  ),
-                  child: _commentComposer(),
-                ),
-              ],
+                  );
+                },
+              ),
             ),
-          );
-        },
+            AnimatedPadding(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.viewInsetsOf(context).bottom,
+              ),
+              child: _commentComposer(),
+            ),
+          ],
+        ),
       );
+    },
+  );
 
   Widget _originalPostCard(Map<String, dynamic> thread) {
     final username = thread['username'] as String? ?? 'listener';
@@ -195,26 +219,39 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         children: [
           Row(
             children: [
-              _UserAvatar(
-                userId: thread['userId'] as String? ?? '',
-                name: username,
-                photoBase64: thread['authorPhotoBase64'] as String?,
-                photoUrl: thread['authorPhotoUrl'] as String?,
-                radius: 21,
+              InkWell(
+                onTap: () => _openUserProfile(
+                  context,
+                  thread['userId'] as String? ?? '',
+                ),
+                customBorder: const CircleBorder(),
+                child: _UserAvatar(
+                  userId: thread['userId'] as String? ?? '',
+                  name: username,
+                  photoBase64: thread['authorPhotoBase64'] as String?,
+                  photoUrl: thread['authorPhotoUrl'] as String?,
+                  radius: 21,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      username.startsWith('@') ? username : '@$username',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: _ink,
+                    InkWell(
+                      onTap: () => _openUserProfile(
+                        context,
+                        thread['userId'] as String? ?? '',
+                      ),
+                      child: Text(
+                        username.startsWith('@') ? username : '@$username',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _ink,
+                        ),
                       ),
                     ),
                     Text(
@@ -238,11 +275,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
           const SizedBox(height: 10),
           Text(
             contextText,
-            style: GoogleFonts.inter(
-              color: _ink,
-              fontSize: 14,
-              height: 1.5,
-            ),
+            style: GoogleFonts.inter(color: _ink, fontSize: 14, height: 1.5),
           ),
           const SizedBox(height: 12),
           Row(
@@ -259,7 +292,10 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                   size: 20,
                 ),
               ),
-              Text('$upvotes', style: GoogleFonts.inter(fontSize: 12, color: _muted)),
+              Text(
+                '$upvotes',
+                style: GoogleFonts.inter(fontSize: 12, color: _muted),
+              ),
               const SizedBox(width: 18),
               const Icon(Icons.chat_bubble_outline, size: 17, color: _muted),
               const SizedBox(width: 6),
@@ -280,9 +316,12 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     try {
       await _firestore.runTransaction((transaction) async {
         final snapshot = await transaction.get(_threadRef);
-        if (!snapshot.exists) throw StateError('Discussion is no longer available.');
+        if (!snapshot.exists)
+          throw StateError('Discussion is no longer available.');
         final upvotes = _number(snapshot.data()?['upvotes']);
-        transaction.update(_threadRef, {'upvotes': (upvotes + increment).clamp(0, 1 << 31)});
+        transaction.update(_threadRef, {
+          'upvotes': (upvotes + increment).clamp(0, 1 << 31),
+        });
       });
     } catch (error) {
       if (!mounted) return;
@@ -298,8 +337,9 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         ? 'Artist'
         : thread['artist'] as String? ?? '';
     return AppBar(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
+      backgroundColor: const Color(0xFFF5F5F5),
+      foregroundColor: _ink,
+      surfaceTintColor: Colors.transparent,
       elevation: 0,
       titleSpacing: 0,
       title: Row(
@@ -314,8 +354,10 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                   : CachedNetworkImage(
                       imageUrl: coverUrl,
                       fit: BoxFit.cover,
-                      placeholder: (_, _) => const ColoredBox(color: _placeholder),
-                      errorWidget: (_, _, _) => const ColoredBox(color: _placeholder),
+                      placeholder: (_, _) =>
+                          const ColoredBox(color: _placeholder),
+                      errorWidget: (_, _, _) =>
+                          const ColoredBox(color: _placeholder),
                     ),
             ),
           ),
@@ -329,7 +371,11 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                   topicTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: _ink),
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: _ink,
+                  ),
                 ),
                 Text(
                   subtitle,
@@ -343,7 +389,126 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
           const SizedBox(width: 12),
         ],
       ),
+      actions: thread['userId'] == FirebaseAuth.instance.currentUser?.uid
+          ? [
+              PopupMenuButton<String>(
+                tooltip: 'Post options',
+                onSelected: (value) =>
+                    value == 'edit' ? _editThread(thread) : _deleteThread(),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'edit', child: Text('Edit post')),
+                  PopupMenuItem(value: 'delete', child: Text('Delete post')),
+                ],
+              ),
+            ]
+          : null,
     );
+  }
+
+  Future<void> _editThread(Map<String, dynamic> thread) async {
+    final titleController = TextEditingController(
+      text: thread['title'] as String? ?? '',
+    );
+    final contextController = TextEditingController(
+      text: thread['context'] as String? ?? '',
+    );
+    final result = await showDialog<(String, String)>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Edit post'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(labelText: 'Title'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: contextController,
+              maxLines: 5,
+              decoration: const InputDecoration(labelText: 'Post'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, (
+              titleController.text.trim(),
+              contextController.text.trim(),
+            )),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    titleController.dispose();
+    contextController.dispose();
+    if (result == null || result.$1.isEmpty || result.$2.isEmpty) return;
+    try {
+      final snapshot = await _threadRef.get();
+      if (snapshot.data()?['userId'] != FirebaseAuth.instance.currentUser?.uid)
+        return;
+      await _threadRef.update({
+        'title': result.$1,
+        'context': result.$2,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (error) {
+      if (mounted) _showActionError('Could not edit post: $error');
+    }
+  }
+
+  Future<void> _deleteThread() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete post?'),
+        content: const Text(
+          'This will permanently remove the post and its replies.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final snapshot = await _threadRef.get();
+      if (snapshot.data()?['userId'] != FirebaseAuth.instance.currentUser?.uid)
+        return;
+      final comments = await _firestore
+          .collection('comments')
+          .where('threadId', isEqualTo: widget.threadId)
+          .get();
+      for (var start = 0; start < comments.docs.length; start += 450) {
+        final batch = _firestore.batch();
+        for (final comment in comments.docs.skip(start).take(450)) {
+          batch.delete(comment.reference);
+        }
+        await batch.commit();
+      }
+      await _threadRef.delete();
+      if (mounted) Navigator.of(context).pop();
+    } catch (error) {
+      if (mounted) _showActionError('Could not delete post: $error');
+    }
+  }
+
+  void _showActionError(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _commentComposer() {
@@ -360,7 +525,9 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
           children: [
             _UserAvatar(
               userId: FirebaseAuth.instance.currentUser?.uid ?? '',
-              name: FirebaseAuth.instance.currentUser?.email?.split('@').first ?? 'listener',
+              name:
+                  FirebaseAuth.instance.currentUser?.email?.split('@').first ??
+                  'listener',
               photoUrl: FirebaseAuth.instance.currentUser?.photoURL,
               radius: 16,
             ),
@@ -373,11 +540,16 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                 textCapitalization: TextCapitalization.sentences,
                 style: GoogleFonts.inter(fontSize: 13, color: _ink),
                 decoration: InputDecoration(
-                  hintText: _replyToUsername == null ? 'Add a comment…' : 'Reply to $_replyToUsername…',
+                  hintText: _replyToUsername == null
+                      ? 'Add a comment…'
+                      : 'Reply to $_replyToUsername…',
                   hintStyle: GoogleFonts.inter(fontSize: 13, color: _muted),
                   filled: true,
                   fillColor: const Color(0xFFF2F2F2),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide.none,
@@ -396,14 +568,25 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 minimumSize: const Size(0, 42),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               child: _posting
                   ? const SizedBox.square(
                       dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
-                  : Text('Post', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700)),
+                  : Text(
+                      'Post',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
             ),
           ],
         ),
@@ -419,7 +602,10 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     var username = user?.email?.split('@').first ?? 'listener';
     if (user != null) {
       try {
-        final profile = await _firestore.collection('users').doc(user.uid).get();
+        final profile = await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .get();
         username = profile.data()?['handle'] as String? ?? username;
       } catch (_) {
         // Keep posting with the email-based username if the lookup fails.
@@ -430,7 +616,8 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
         final parentRef = _firestore.collection('comments').doc(parentId);
         await _firestore.runTransaction((transaction) async {
           final parent = await transaction.get(parentRef);
-          if (!parent.exists) throw StateError('The comment you replied to no longer exists.');
+          if (!parent.exists)
+            throw StateError('The comment you replied to no longer exists.');
           final replies = (parent.data()?['replies'] as List? ?? [])
               .whereType<Map>()
               .map((reply) => Map<String, dynamic>.from(reply))
@@ -444,7 +631,9 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
             'createdAt': Timestamp.now(),
           });
           transaction.update(parentRef, {'replies': replies});
-          transaction.update(_threadRef, {'replyCount': FieldValue.increment(1)});
+          transaction.update(_threadRef, {
+            'replyCount': FieldValue.increment(1),
+          });
         });
       } else {
         await _firestore.collection('comments').add({
@@ -481,9 +670,9 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _posting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not post comment: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not post comment: $error')));
     }
   }
 
@@ -508,7 +697,8 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
       final commentRef = _firestore.collection('comments').doc(commentId);
       await _firestore.runTransaction((transaction) async {
         final snapshot = await transaction.get(commentRef);
-        if (!snapshot.exists) throw StateError('Comment is no longer available.');
+        if (!snapshot.exists)
+          throw StateError('Comment is no longer available.');
         transaction.update(commentRef, {
           'upvotes': _number(snapshot.data()?['upvotes']) + increment,
         });
@@ -544,9 +734,13 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
             .whereType<Map>()
             .map((reply) => Map<String, dynamic>.from(reply))
             .toList();
-        if (replyIndex >= replies.length) throw StateError('Reply is no longer available.');
+        if (replyIndex >= replies.length)
+          throw StateError('Reply is no longer available.');
         final current = _number(replies[replyIndex]['upvotes']);
-        replies[replyIndex]['upvotes'] = (current + increment).clamp(0, 1 << 31);
+        replies[replyIndex]['upvotes'] = (current + increment).clamp(
+          0,
+          1 << 31,
+        );
         transaction.update(commentRef, {'replies': replies});
       });
     } catch (error) {
@@ -563,20 +757,24 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
   }
 
   void _showVoteError(Object error) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Could not update vote: $error')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Could not update vote: $error')));
   }
 
   Widget _messageScaffold(String message) => Scaffold(
-        appBar: AppBar(backgroundColor: Colors.white, elevation: 0),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(message, textAlign: TextAlign.center),
-          ),
-        ),
-      );
+    appBar: AppBar(
+      backgroundColor: const Color(0xFFF5F5F5),
+      foregroundColor: _ink,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+    ),
+    body: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(message, textAlign: TextAlign.center),
+      ),
+    ),
+  );
 }
 
 class _CommentCard extends StatelessWidget {
@@ -603,38 +801,73 @@ class _CommentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final username = comment['username'] as String? ?? 'Listener';
     final text = comment['text'] as String? ?? '';
-    final replies = (comment['replies'] as List? ?? []).whereType<Map>().toList();
+    final replies = (comment['replies'] as List? ?? [])
+        .whereType<Map>()
+        .toList();
     final upvotes = (_number(comment['upvotes'])) + (voted ? 1 : 0);
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              _UserAvatar(
-                userId: comment['userId'] as String? ?? '',
-                name: username,
-                photoBase64: comment['photoBase64'] as String?,
-                photoUrl: comment['photoUrl'] as String?,
-                radius: 18,
+              InkWell(
+                onTap: () => _openUserProfile(
+                  context,
+                  comment['userId'] as String? ?? '',
+                ),
+                customBorder: const CircleBorder(),
+                child: _UserAvatar(
+                  userId: comment['userId'] as String? ?? '',
+                  name: username,
+                  photoBase64: comment['photoBase64'] as String?,
+                  photoUrl: comment['photoUrl'] as String?,
+                  radius: 18,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(username, style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: _ink)),
-                    Text(_timestamp(comment['createdAt']), style: GoogleFonts.inter(fontSize: 11, color: _muted)),
+                    InkWell(
+                      onTap: () => _openUserProfile(
+                        context,
+                        comment['userId'] as String? ?? '',
+                      ),
+                      child: Text(
+                        username,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: _ink,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      _timestamp(comment['createdAt']),
+                      style: GoogleFonts.inter(fontSize: 11, color: _muted),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Text(text, style: GoogleFonts.inter(fontSize: 14, height: 1.5, color: _ink.withValues(alpha: 0.8))),
+          Text(
+            text,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              height: 1.5,
+              color: _ink.withValues(alpha: 0.8),
+            ),
+          ),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -649,12 +882,24 @@ class _CommentCard extends StatelessWidget {
                   size: 20,
                 ),
               ),
-              Text('$upvotes', style: GoogleFonts.inter(fontSize: 12, color: _muted)),
+              Text(
+                '$upvotes',
+                style: GoogleFonts.inter(fontSize: 12, color: _muted),
+              ),
               const SizedBox(width: 10),
               TextButton(
                 onPressed: onReply,
-                style: TextButton.styleFrom(foregroundColor: _muted, padding: const EdgeInsets.symmetric(horizontal: 8)),
-                child: Text('Reply', style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600)),
+                style: TextButton.styleFrom(
+                  foregroundColor: _muted,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+                child: Text(
+                  'Reply',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
@@ -663,7 +908,9 @@ class _CommentCard extends StatelessWidget {
               margin: const EdgeInsets.only(left: 16, top: 4),
               padding: const EdgeInsets.only(left: 12),
               decoration: const BoxDecoration(
-                border: Border(left: BorderSide(color: Color(0x1A3F3F3F), width: 2)),
+                border: Border(
+                  left: BorderSide(color: Color(0x1A3F3F3F), width: 2),
+                ),
               ),
               child: ListView.separated(
                 itemCount: replies.length,
@@ -687,7 +934,11 @@ class _CommentCard extends StatelessWidget {
 }
 
 class _ReplyRow extends StatelessWidget {
-  const _ReplyRow({required this.reply, required this.voted, required this.onVote});
+  const _ReplyRow({
+    required this.reply,
+    required this.voted,
+    required this.onVote,
+  });
 
   final Map<String, dynamic> reply;
   final bool voted;
@@ -700,12 +951,17 @@ class _ReplyRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _UserAvatar(
-          userId: reply['userId'] as String? ?? '',
-          name: username,
-          photoBase64: reply['photoBase64'] as String?,
-          photoUrl: reply['photoUrl'] as String?,
-          radius: 14,
+        InkWell(
+          onTap: () =>
+              _openUserProfile(context, reply['userId'] as String? ?? ''),
+          customBorder: const CircleBorder(),
+          child: _UserAvatar(
+            userId: reply['userId'] as String? ?? '',
+            name: username,
+            photoBase64: reply['photoBase64'] as String?,
+            photoUrl: reply['photoUrl'] as String?,
+            radius: 14,
+          ),
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -714,9 +970,29 @@ class _ReplyRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(username, style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: _ink)),
+                InkWell(
+                  onTap: () => _openUserProfile(
+                    context,
+                    reply['userId'] as String? ?? '',
+                  ),
+                  child: Text(
+                    username,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: _ink,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(reply['text'] as String? ?? '', style: GoogleFonts.inter(fontSize: 12, height: 1.4, color: _muted)),
+                Text(
+                  reply['text'] as String? ?? '',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    height: 1.4,
+                    color: _muted,
+                  ),
+                ),
               ],
             ),
           ),
@@ -726,7 +1002,11 @@ class _ReplyRow extends StatelessWidget {
           visualDensity: VisualDensity.compact,
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          icon: Icon(Icons.arrow_upward_rounded, size: 15, color: voted ? _teal : _muted),
+          icon: Icon(
+            Icons.arrow_upward_rounded,
+            size: 15,
+            color: voted ? _teal : _muted,
+          ),
         ),
         Text('$count', style: GoogleFonts.inter(fontSize: 10, color: _muted)),
       ],
@@ -821,7 +1101,11 @@ class _UserAvatar extends StatelessWidget {
 int _number(Object? value) => value is num ? value.toInt() : 0;
 
 String _timestamp(Object? value) {
-  final date = value is Timestamp ? value.toDate() : value is DateTime ? value : null;
+  final date = value is Timestamp
+      ? value.toDate()
+      : value is DateTime
+      ? value
+      : null;
   if (date == null) return '';
   final elapsed = DateTime.now().difference(date);
   if (elapsed.inMinutes < 1) return 'Just now';

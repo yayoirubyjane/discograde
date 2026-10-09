@@ -15,7 +15,6 @@ const _ink = Color(0xFF3F3F3F);
 const _teal = Color(0xFF0E8A8A);
 const _navy = Color(0xFF0B4B8B);
 const _red = Color(0xFFBA011A);
-const _amber = Color(0xFFD5531F);
 const _muted = Color(0xFF858585);
 const _line = Color(0xFFE2E2E2);
 
@@ -48,6 +47,7 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
   final _password = TextEditingController();
   final _confirm = TextEditingController();
   final _username = TextEditingController();
+  final _aboutMe = TextEditingController();
   final _picker = ImagePicker();
 
   int _step = 0;
@@ -81,6 +81,7 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
     _password.dispose();
     _confirm.dispose();
     _username.dispose();
+    _aboutMe.dispose();
     super.dispose();
   }
 
@@ -93,26 +94,7 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
     caseSensitive: false,
   ).hasMatch(_email.text.trim());
 
-  List<bool> get _passwordRules {
-    final password = _password.text;
-    return [
-      password.length >= 8,
-      RegExp(r'[A-Z]').hasMatch(password),
-      RegExp(r'[a-z]').hasMatch(password),
-      RegExp(r'\d').hasMatch(password),
-      RegExp(r'[^A-Za-z0-9]').hasMatch(password),
-    ];
-  }
-
-  int get _strength {
-    final passed = _passwordRules.where((rule) => rule).length;
-    if (passed == 5) return 3;
-    if (passed >= 3) return 2;
-    if (passed > 0) return 1;
-    return 0;
-  }
-
-  bool get _passwordValid => _passwordRules.every((rule) => rule);
+  bool get _passwordValid => _password.text.length >= 6;
   bool get _passwordsMatch =>
       _confirm.text.isNotEmpty && _confirm.text == _password.text;
   bool get _canContinue => _validEmail && _passwordValid && _passwordsMatch;
@@ -196,6 +178,7 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
         await AuthService.completeGoogleProfile(
           username: _username.text,
           favoriteGenres: _selectedGenres.toList(),
+          aboutMe: _aboutMe.text.trim(),
           photoBase64: _avatarBytes == null
               ? null
               : base64Encode(_avatarBytes!),
@@ -206,6 +189,7 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
           password: _password.text,
           username: _username.text,
           favoriteGenres: _selectedGenres.toList(),
+          aboutMe: _aboutMe.text.trim(),
           photoBase64: _avatarBytes == null
               ? null
               : base64Encode(_avatarBytes!),
@@ -213,8 +197,14 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
       }
       if (mounted) context.go('/home');
     } on FirebaseAuthException catch (error) {
+      if (error.code == 'email-already-in-use') {
+        _toast(
+          'An account already uses this email. Log in with Google or your existing sign-in method.',
+        );
+        if (mounted) context.go('/login');
+        return;
+      }
       _toast(switch (error.code) {
-        'email-already-in-use' => 'An account already uses that email.',
         'weak-password' => 'Choose a stronger password.',
         'invalid-email' => 'That email address is not valid.',
         _ => error.message ?? 'Could not create the account.',
@@ -241,7 +231,7 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 460),
               child: Column(
@@ -265,7 +255,7 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
                     ),
                   Center(
                     child: SizedBox(
-                      height: 64,
+                      height: 112,
                       child: Image.asset(
                         'assets/assets/AQUINO CCE106 LOGO CROPPED.png',
                         fit: BoxFit.contain,
@@ -376,10 +366,7 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
 
   Widget _credentialsCard() => _formCard(
     children: [
-      _title(
-        'Create your account',
-        'Start with your email and a strong password.',
-      ),
+      _title('Create your account', 'Start with your email and password.'),
       const SizedBox(height: 22),
       _label('EMAIL'),
       const SizedBox(height: 6),
@@ -411,10 +398,6 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
           ),
         ),
       ),
-      const SizedBox(height: 11),
-      _strengthMeter(),
-      const SizedBox(height: 9),
-      ..._passwordRequirementRows(),
       const SizedBox(height: 16),
       _label('CONFIRM PASSWORD'),
       const SizedBox(height: 6),
@@ -436,6 +419,20 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
         ),
         error: _confirmError,
       ),
+      const SizedBox(height: 16),
+      _label('ABOUT ME  ·  OPTIONAL'),
+      const SizedBox(height: 6),
+      _textField(
+        controller: _aboutMe,
+        hint: 'Tell people a little about yourself',
+        semanticLabel: 'About Me',
+        keyboardType: TextInputType.multiline,
+        textInputAction: TextInputAction.newline,
+        textCapitalization: TextCapitalization.sentences,
+        minLines: 2,
+        maxLines: 3,
+        maxLength: 200,
+      ),
       const SizedBox(height: 22),
       _primaryButton(
         label: 'Continue',
@@ -447,84 +444,6 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
 
   bool _visiblePassword = false;
   bool _visibleConfirm = false;
-
-  Widget _strengthMeter() {
-    final strength = _strength;
-    const segmentColors = [_red, _amber, _teal];
-    final color = strength == 3
-        ? _teal
-        : strength == 2
-        ? _amber
-        : _red;
-    final label = strength == 3
-        ? 'Strong'
-        : strength == 2
-        ? 'Fair'
-        : 'Weak';
-    return Row(
-      children: [
-        Expanded(
-          child: Row(
-            children: List.generate(
-              3,
-              (index) => Expanded(
-                child: Container(
-                  height: 5,
-                  margin: EdgeInsets.only(right: index == 2 ? 0 : 5),
-                  decoration: BoxDecoration(
-                    color: index < strength ? segmentColors[index] : _line,
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Text(
-          _password.text.isEmpty ? 'Password strength' : label,
-          style: GoogleFonts.inter(
-            fontSize: 11,
-            color: _password.text.isEmpty ? _muted : color,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-
-  List<Widget> _passwordRequirementRows() {
-    const labels = [
-      'At least 8 characters',
-      'One uppercase letter',
-      'One lowercase letter',
-      'One number',
-      'One symbol',
-    ];
-    return List.generate(labels.length, (index) {
-      final passed = _passwordRules[index];
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Row(
-          children: [
-            Icon(
-              passed ? Icons.check_circle : Icons.circle_outlined,
-              size: 15,
-              color: passed ? _teal : _muted,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              labels[index],
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: passed ? _teal : _muted,
-              ),
-            ),
-          ],
-        ),
-      );
-    });
-  }
 
   Widget _profileCard() => _formCard(
     children: [
@@ -582,6 +501,22 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
         ),
       ),
       const SizedBox(height: 19),
+      if (widget.profileOnly) ...[
+        _label('ABOUT ME  ·  OPTIONAL'),
+        const SizedBox(height: 6),
+        _textField(
+          controller: _aboutMe,
+          hint: 'Tell people a little about yourself',
+          semanticLabel: 'About Me',
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          textCapitalization: TextCapitalization.sentences,
+          minLines: 2,
+          maxLines: 3,
+          maxLength: 200,
+        ),
+      ],
+      const SizedBox(height: 19),
       _label('PROFILE PHOTO  ·  OPTIONAL'),
       const SizedBox(height: 10),
       Row(
@@ -600,10 +535,7 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
                           size: 30,
                         )
                       : Text(
-                          _username.text
-                              .trim()
-                              .substring(0, 1)
-                              .toUpperCase(),
+                          _username.text.trim().substring(0, 1).toUpperCase(),
                           style: GoogleFonts.inter(
                             color: Colors.white,
                             fontSize: 23,
@@ -758,6 +690,10 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
     String? semanticLabel,
     Iterable<String>? autofillHints,
     bool obscureText = false,
+    int? minLines,
+    int? maxLines,
+    int? maxLength,
+    TextCapitalization textCapitalization = TextCapitalization.none,
     Widget? suffix,
     Widget? prefix,
     String? error,
@@ -775,6 +711,10 @@ class _TwoStepSignUpScreenState extends State<TwoStepSignUpScreen> {
           textInputAction: textInputAction,
           autofillHints: autofillHints,
           obscureText: obscureText,
+          minLines: minLines,
+          maxLines: maxLines,
+          maxLength: maxLength,
+          textCapitalization: textCapitalization,
           onTap: onTap,
           onChanged: onChanged,
           style: GoogleFonts.inter(fontSize: 14, color: _ink),

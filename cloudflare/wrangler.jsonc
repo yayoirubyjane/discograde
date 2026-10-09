@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "discograde-ai",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-01",
+  "ai": {
+    "binding": "AI"
+  },
+  "vars": {
+    "FIREBASE_PROJECT_ID": "discograde0901",
+    "FIREBASE_PROJECT_NUMBER": "995888910087",
+    "FIREBASE_APP_IDS": "1:995888910087:android:e2320d841438e9f508bfa2,1:995888910087:web:d8c2a8e4e632850808bfa2",
+    "ALLOWED_ORIGINS": "http://localhost:5000,http://127.0.0.1:5000"
+  }
+}

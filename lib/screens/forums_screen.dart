@@ -21,7 +21,8 @@ class ForumsScreen extends StatefulWidget {
   State<ForumsScreen> createState() => _ForumsScreenState();
 }
 
-class _ForumsScreenState extends State<ForumsScreen> with SingleTickerProviderStateMixin {
+class _ForumsScreenState extends State<ForumsScreen>
+    with SingleTickerProviderStateMixin {
   final _searchController = TextEditingController();
   final _recentScrollController = ScrollController();
   late final TabController _tabController;
@@ -103,12 +104,15 @@ class _ForumsScreenState extends State<ForumsScreen> with SingleTickerProviderSt
 
   Future<void> _startNewDiscussion() async {
     while (mounted) {
-      final target = await Navigator.of(context).push<_DiscussionTarget>(
-        MaterialPageRoute(builder: (_) => const _SelectDiscussionTargetScreen()),
-      );
+      final target = await Navigator.of(context, rootNavigator: true)
+          .push<_DiscussionTarget>(
+            MaterialPageRoute(
+              builder: (_) => const _SelectDiscussionTargetScreen(),
+            ),
+          );
       if (target == null || !mounted) return;
 
-      final result = await Navigator.of(context)
+      final result = await Navigator.of(context, rootNavigator: true)
           .push<_DiscussionComposerResult>(
             MaterialPageRoute(
               builder: (_) => _StartDiscussionScreen(target: target),
@@ -122,16 +126,19 @@ class _ForumsScreenState extends State<ForumsScreen> with SingleTickerProviderSt
           await _saveDiscussion(thread);
           if (!mounted) return;
           _tabController.animateTo(1);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Discussion posted.')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Discussion posted.')));
         } on FirebaseException catch (error) {
           if (!mounted) return;
           final message = error.code == 'permission-denied'
               ? 'Firestore blocked this account from posting. Check your Firestore rules.'
               : 'Could not post discussion (${error.code}): ${error.message ?? 'Please try again.'}';
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(message), duration: const Duration(seconds: 6)),
+            SnackBar(
+              content: Text(message),
+              duration: const Duration(seconds: 6),
+            ),
           );
         } catch (error) {
           if (!mounted) return;
@@ -182,147 +189,158 @@ class _ForumsScreenState extends State<ForumsScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: const Color(0xFFF5F5F5),
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
-          elevation: 0,
-          titleSpacing: 20,
-          title: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 260),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) => FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: animation.drive(
-                  Tween<Offset>(begin: const Offset(0.12, 0), end: Offset.zero),
-                ),
-                child: child,
-              ),
+    backgroundColor: const Color(0xFFF5F5F5),
+    appBar: AppBar(
+      backgroundColor: const Color(0xFFF5F5F5),
+      foregroundColor: _ink,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      titleSpacing: 20,
+      title: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 260),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: animation.drive(
+              Tween<Offset>(begin: const Offset(0.12, 0), end: Offset.zero),
             ),
-            child: _searching
-                ? TextField(
-                    key: const ValueKey('forum-search-field'),
-                    controller: _searchController,
-                    autofocus: true,
-                    onChanged: (_) => setState(() {}),
-                    style: GoogleFonts.inter(fontSize: 14, color: _ink),
-                    decoration: InputDecoration(
-                      hintText: 'Search discussions',
-                      hintStyle: GoogleFonts.inter(fontSize: 14, color: _muted),
-                      prefixIcon: const Icon(Icons.search, color: _muted, size: 20),
-                      suffixIcon: _searchController.text.isEmpty
-                          ? null
-                          : IconButton(
-                              tooltip: 'Clear search',
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {});
-                              },
-                              icon: const Icon(Icons.close, size: 18, color: _muted),
-                            ),
-                      filled: true,
-                      fillColor: const Color(0xFFF2F2F2),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  )
-                : Text(
-                    'Forums',
-                    key: const ValueKey('forum-title'),
-                    style: GoogleFonts.inter(fontSize: 22, fontWeight: FontWeight.w800, color: _ink),
+            child: child,
+          ),
+        ),
+        child: _searching
+            ? TextField(
+                key: const ValueKey('forum-search-field'),
+                controller: _searchController,
+                autofocus: true,
+                onChanged: (_) => setState(() {}),
+                style: GoogleFonts.inter(fontSize: 14, color: _ink),
+                decoration: InputDecoration(
+                  hintText: 'Search discussions',
+                  hintStyle: GoogleFonts.inter(fontSize: 14, color: _muted),
+                  prefixIcon: const Icon(Icons.search, color: _muted, size: 20),
+                  filled: true,
+                  fillColor: const Color(0xFFF2F2F2),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
                   ),
-          ),
-          actions: [
-            IconButton(
-              tooltip: _searching ? 'Close search' : 'Search forums',
-              onPressed: _toggleSearch,
-              icon: Icon(_searching ? Icons.close : Icons.search, color: _ink),
+                ),
+              )
+            : Text(
+                'Forums',
+                key: const ValueKey('forum-title'),
+                style: GoogleFonts.inter(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: _ink,
+                ),
+              ),
+      ),
+      actions: [
+        IconButton(
+          tooltip: _searching ? 'Close search' : 'Search forums',
+          onPressed: _toggleSearch,
+          icon: Icon(_searching ? Icons.close : Icons.search, color: _ink),
+        ),
+        const SizedBox(width: 8),
+      ],
+      bottom: TabBar(
+        controller: _tabController,
+        dividerColor: const Color(0x1A3F3F3F),
+        indicator: const UnderlineTabIndicator(
+          borderSide: BorderSide(color: _teal, width: 3),
+          insets: EdgeInsets.symmetric(horizontal: 20),
+        ),
+        indicatorSize: TabBarIndicatorSize.label,
+        labelColor: _ink,
+        unselectedLabelColor: _muted,
+        labelStyle: GoogleFonts.inter(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+        tabs: const [
+          Tab(text: 'TRENDING'),
+          Tab(text: 'RECENT'),
+        ],
+      ),
+    ),
+    body: TabBarView(
+      controller: _tabController,
+      children: [_trendingTab(), _recentTab()],
+    ),
+    floatingActionButton: _searching
+        ? null
+        : Padding(
+            padding: const EdgeInsets.only(bottom: 88),
+            child: FloatingActionButton(
+              onPressed: _startNewDiscussion,
+              backgroundColor: _teal,
+              foregroundColor: Colors.white,
+              tooltip: 'New discussion',
+              child: const Icon(Icons.add),
             ),
-            const SizedBox(width: 8),
-          ],
-          bottom: TabBar(
-            controller: _tabController,
-            indicator: const UnderlineTabIndicator(
-              borderSide: BorderSide(color: _teal, width: 3),
-              insets: EdgeInsets.symmetric(horizontal: 20),
-            ),
-            indicatorSize: TabBarIndicatorSize.label,
-            labelColor: _ink,
-            unselectedLabelColor: _muted,
-            labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700),
-            tabs: const [Tab(text: 'TRENDING'), Tab(text: 'RECENT')],
           ),
-        ),
-        body: TabBarView(
-          controller: _tabController,
-          children: [
-            _trendingTab(),
-            _recentTab(),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: _startNewDiscussion,
-          backgroundColor: _teal,
-          foregroundColor: Colors.white,
-          tooltip: 'New discussion',
-          child: const Icon(Icons.add),
-        ),
-      );
+  );
 
   Widget _trendingTab() => StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: _trendingStream,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) return _errorMessage('Could not load trending discussions.');
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: _teal));
-          final threads = _filterThreads(snapshot.data!.docs);
-          return _threadList(threads, key: const PageStorageKey('trending-threads'));
-        },
+    stream: _trendingStream,
+    builder: (context, snapshot) {
+      if (snapshot.hasError)
+        return _errorMessage('Could not load trending discussions.');
+      if (!snapshot.hasData)
+        return const Center(child: CircularProgressIndicator(color: _teal));
+      final threads = _filterThreads(snapshot.data!.docs);
+      return _threadList(
+        threads,
+        key: const PageStorageKey('trending-threads'),
       );
+    },
+  );
 
   Widget _recentTab() => StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: _recentStream,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) return _errorMessage('Could not load recent discussions.');
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: _teal));
+    stream: _recentStream,
+    builder: (context, snapshot) {
+      if (snapshot.hasError)
+        return _errorMessage('Could not load recent discussions.');
+      if (!snapshot.hasData)
+        return const Center(child: CircularProgressIndicator(color: _teal));
 
-          final firstPage = snapshot.data!.docs;
-          _recentFirstPageLast = firstPage.isEmpty ? null : firstPage.last;
-          if (_additionalRecent.isEmpty) _hasMore = firstPage.length == 20;
-          final ids = firstPage.map((thread) => thread.id).toSet();
-          final allThreads = [
-            ...firstPage,
-            ..._additionalRecent.where((thread) => !ids.contains(thread.id)),
-          ];
-          final filtered = _filterThreads(allThreads);
-          final localThreads = _filterLocalThreads(_localRecentThreads);
+      final firstPage = snapshot.data!.docs;
+      _recentFirstPageLast = firstPage.isEmpty ? null : firstPage.last;
+      if (_additionalRecent.isEmpty) _hasMore = firstPage.length == 20;
+      final ids = firstPage.map((thread) => thread.id).toSet();
+      final allThreads = [
+        ...firstPage,
+        ..._additionalRecent.where((thread) => !ids.contains(thread.id)),
+      ];
+      final filtered = _filterThreads(allThreads);
+      final localThreads = _filterLocalThreads(_localRecentThreads);
 
-          return Column(
-            children: [
-              Expanded(
-                child: _threadList(
-                  filtered,
-                  localThreads: localThreads,
-                  controller: _recentScrollController,
-                  key: const PageStorageKey('recent-threads'),
-                ),
+      return Column(
+        children: [
+          Expanded(
+            child: _threadList(
+              filtered,
+              localThreads: localThreads,
+              controller: _recentScrollController,
+              key: const PageStorageKey('recent-threads'),
+            ),
+          ),
+          if (_loadingMore)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: _teal),
               ),
-              if (_loadingMore)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 12),
-                  child: SizedBox.square(
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: _teal),
-                  ),
-                ),
-            ],
-          );
-      },
-    );
+            ),
+        ],
+      );
+    },
+  );
 
   List<Map<String, dynamic>> _filterLocalThreads(
     List<Map<String, dynamic>> threads,
@@ -332,8 +350,7 @@ class _ForumsScreenState extends State<ForumsScreen> with SingleTickerProviderSt
     return threads.where((thread) {
       final title = (thread['title'] as String? ?? '').toLowerCase();
       final artist = (thread['artist'] as String? ?? '').toLowerCase();
-      final topicTitle = (thread['topicTitle'] as String? ?? '')
-          .toLowerCase();
+      final topicTitle = (thread['topicTitle'] as String? ?? '').toLowerCase();
       final preview = (thread['context'] as String? ?? '').toLowerCase();
       return title.contains(term) ||
           artist.contains(term) ||
@@ -364,7 +381,9 @@ class _ForumsScreenState extends State<ForumsScreen> with SingleTickerProviderSt
     if (threads.isEmpty && localThreads.isEmpty) {
       return Center(
         child: Text(
-          _searchController.text.isEmpty ? 'No discussions yet.' : 'No matching discussions.',
+          _searchController.text.isEmpty
+              ? 'No discussions yet.'
+              : 'No matching discussions.',
           style: GoogleFonts.inter(fontSize: 13, color: _muted),
         ),
       );
@@ -373,7 +392,10 @@ class _ForumsScreenState extends State<ForumsScreen> with SingleTickerProviderSt
       key: key,
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: ListView.separated(
         controller: controller,
         itemCount: localThreads.length + threads.length,
@@ -413,11 +435,14 @@ class _ForumsScreenState extends State<ForumsScreen> with SingleTickerProviderSt
   }
 
   Widget _errorMessage(String message) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(message, style: GoogleFonts.inter(fontSize: 13, color: _muted)),
-        ),
-      );
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Text(
+        message,
+        style: GoogleFonts.inter(fontSize: 13, color: _muted),
+      ),
+    ),
+  );
 }
 
 class _ThreadCard extends StatelessWidget {
@@ -458,8 +483,10 @@ class _ThreadCard extends StatelessWidget {
                     : CachedNetworkImage(
                         imageUrl: coverUrl,
                         fit: BoxFit.cover,
-                        placeholder: (_, _) => const ColoredBox(color: _placeholder),
-                        errorWidget: (_, _, _) => const ColoredBox(color: _placeholder),
+                        placeholder: (_, _) =>
+                            const ColoredBox(color: _placeholder),
+                        errorWidget: (_, _, _) =>
+                            const ColoredBox(color: _placeholder),
                       ),
               ),
             ),
@@ -472,7 +499,11 @@ class _ThreadCard extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: _ink),
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: _ink,
+                    ),
                   ),
                   Text(
                     topicSubtitle,
@@ -484,10 +515,17 @@ class _ThreadCard extends StatelessWidget {
                     preview.isEmpty ? 'Start the conversation' : preview,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(fontSize: 12, fontStyle: FontStyle.italic, color: _muted),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                      color: _muted,
+                    ),
                   ),
                   if (timestamp.isNotEmpty)
-                    Text(timestamp, style: GoogleFonts.inter(fontSize: 10, color: _muted)),
+                    Text(
+                      timestamp,
+                      style: GoogleFonts.inter(fontSize: 10, color: _muted),
+                    ),
                 ],
               ),
             ),
@@ -516,13 +554,13 @@ class _ThreadCount extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: _muted),
-          const SizedBox(width: 4),
-          Text('$count', style: GoogleFonts.inter(fontSize: 10, color: _muted)),
-        ],
-      );
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: 15, color: _muted),
+      const SizedBox(width: 4),
+      Text('$count', style: GoogleFonts.inter(fontSize: 10, color: _muted)),
+    ],
+  );
 }
 
 String _commentPreview(Map<String, dynamic> data) {
@@ -632,9 +670,13 @@ class _SelectDiscussionTargetScreenState
           );
         }
       }
-      albums.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+      albums.sort(
+        (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+      );
       final artistTargets = artists.values.toList()
-        ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        ..sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
       return [...albums, ...artistTargets];
     } catch (_) {
       return _discussionMockTargets;
@@ -654,8 +696,9 @@ class _SelectDiscussionTargetScreenState
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: const Color(0xFFF5F5F5),
+        foregroundColor: _ink,
+        surfaceTintColor: Colors.transparent,
         title: Text(
           'Select Album or Artist',
           style: GoogleFonts.inter(
@@ -725,60 +768,56 @@ class _SelectDiscussionTargetScreenState
                   );
                 }
                 return ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                    itemCount: results.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final target = results[index];
-                      return Material(
-                        color: Colors.white,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                  itemCount: results.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final target = results[index];
+                    return Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      child: InkWell(
                         borderRadius: BorderRadius.circular(14),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: () => Navigator.of(context).pop(target),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Row(
-                              children: [
-                                _DiscussionCover(target: target, size: 52),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        target.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: GoogleFonts.inter(
-                                          color: _ink,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
-                                        ),
+                        onTap: () => Navigator.of(context).pop(target),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              _DiscussionCover(target: target, size: 52),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      target.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.inter(
+                                        color: _ink,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
                                       ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        target.subtitle,
-                                        style: GoogleFonts.inter(
-                                          color: _muted,
-                                          fontSize: 12,
-                                        ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      target.subtitle,
+                                      style: GoogleFonts.inter(
+                                        color: _muted,
+                                        fontSize: 12,
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  color: _muted,
-                                ),
-                              ],
-                            ),
+                              ),
+                              const Icon(Icons.chevron_right, color: _muted),
+                            ],
                           ),
                         ),
-                      );
-                    },
-                  );
+                      ),
+                    );
+                  },
+                );
               },
             ),
           ),
@@ -830,8 +869,9 @@ class _StartDiscussionScreenState extends State<_StartDiscussionScreen> {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xFFF5F5F5),
     appBar: AppBar(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
+      backgroundColor: const Color(0xFFF5F5F5),
+      foregroundColor: _ink,
+      surfaceTintColor: Colors.transparent,
       title: Text(
         'Start Discussion',
         style: GoogleFonts.inter(
@@ -842,7 +882,8 @@ class _StartDiscussionScreenState extends State<_StartDiscussionScreen> {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(const _ChangeDiscussionTarget()),
+          onPressed: () =>
+              Navigator.of(context).pop(const _ChangeDiscussionTarget()),
           child: Text(
             'Change',
             style: GoogleFonts.inter(color: _teal, fontWeight: FontWeight.w600),
@@ -1241,14 +1282,16 @@ class _TemporaryThreadPreviewScreenState
               ),
               child: Text(
                 'Reply',
-                style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             if (comment.replies.isNotEmpty)
               TextButton(
-                onPressed: () => setState(
-                  () => comment.showReplies = !comment.showReplies,
-                ),
+                onPressed: () =>
+                    setState(() => comment.showReplies = !comment.showReplies),
                 style: TextButton.styleFrom(
                   foregroundColor: _teal,
                   minimumSize: const Size(44, 40),
@@ -1282,8 +1325,9 @@ class _TemporaryThreadPreviewScreenState
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: const Color(0xFFF5F5F5),
+        foregroundColor: _ink,
+        surfaceTintColor: Colors.transparent,
         titleSpacing: 0,
         title: Row(
           children: [
@@ -1463,7 +1507,11 @@ class _TemporaryThreadPreviewScreenState
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    const Icon(Icons.arrow_upward_rounded, size: 18, color: _muted),
+                    const Icon(
+                      Icons.arrow_upward_rounded,
+                      size: 18,
+                      color: _muted,
+                    ),
                     const SizedBox(width: 5),
                     Text('0', style: GoogleFonts.inter(color: _muted)),
                     const SizedBox(width: 18),
@@ -1664,9 +1712,8 @@ class _PreviewAvatar extends StatelessWidget {
   }
 }
 
-String _atHandle(String username) => username.startsWith('@')
-    ? username
-    : '@$username';
+String _atHandle(String username) =>
+    username.startsWith('@') ? username : '@$username';
 
 String _formatPostTimestamp(Object? value) {
   final date = switch (value) {

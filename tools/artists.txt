@@ -15,22 +15,38 @@
 # Justin Bieber
 # Billie Eilish | f4abc0b5-3f7a-4eff-8f78-ac078dbce533
 # Sabrina Carpenter
-Olivia Rodrigo
+# Olivia Rodrigo
 # Summer Walker
 # After | fdfad2ff-6b6d-4f94-8a33-295944b2bd31
-Charli xcx
-ADÉLA | f40856e6-079f-4a0a-916e-9e6a5e04f646
-Kehlani
-FLO | 6ecae756-cfa6-4011-ae56-e8d9c4be447a
-Camila Cabello
-Denise Julia | 3f538490-78d5-49a8-b2b2-8359f2dd32a6
-SAILORR | b1a17965-b396-42e4-84f7-25d42b12f7c0
-underscores | ab1a3f85-e0ea-470a-af5c-175447ae774c
-Frost Children
-Slayyyter
-Kali Uchis
-Tyler the Creator
-LISA | 30aeb57f-bb16-47fa-86ca-79fc57b4d12c
-ROSÉ | 7f233cda-eacb-4235-b681-5f7be343a1a2
-JISOO | f906154a-7011-49c3-8f6a-44ca83311b08
-BLACKPINK
+# Charli xcx
+# ADÉLA | f40856e6-079f-4a0a-916e-9e6a5e04f646
+# Kehlani
+# FLO | 6ecae756-cfa6-4011-ae56-e8d9c4be447a
+# Camila Cabello
+# Denise Julia | 3f538490-78d5-49a8-b2b2-8359f2dd32a6
+# SAILORR | b1a17965-b396-42e4-84f7-25d42b12f7c0
+# underscores | ab1a3f85-e0ea-470a-af5c-175447ae774c
+# Frost Children
+# Slayyyter
+# Kali Uchis
+# Tyler the Creator
+# LISA | 30aeb57f-bb16-47fa-86ca-79fc57b4d12c
+# ROSÉ | 7f233cda-eacb-4235-b681-5f7be343a1a2
+# JISOO | f906154a-7011-49c3-8f6a-44ca83311b08
+# BLACKPINK
+KATSEYE
+Addison Rae
+Lola Young
+Remi Wolf
+sombr | 502cf908-9921-48bc-bf0e-265c881c0156
+Olivia Dean
+The Marías | 7a3970c9-ecd8-4eee-a267-4d8c77d97ff3
+Leon Thomas | 412ff65d-26bf-4849-ba19-d2a58030fd1a
+fakemink
+Destin Conrad
+Tiffany Day
+Inayah | 6c17dc3a-2b0e-4967-a86d-402ff703eb0e
+CORTIS | d27808c8-d3a6-4bbe-acc2-22d5e19f3bca
+Hearts2Hearts | 066080a4-84c7-46c6-91d3-dc10d572749b
+MILEY | 7e9bd05a-117f-4cce-87bc-e011527a8b18
+
